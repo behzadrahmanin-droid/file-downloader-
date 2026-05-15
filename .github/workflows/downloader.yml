@@ -1,0 +1,32 @@
+name: File Downloader
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Download link"
+        required: true
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install aria2
+        run: sudo apt install aria2 -y
+
+      - name: Download file
+        run: |
+          mkdir downloads
+          cd downloads
+          aria2c "${{ github.event.inputs.url }}"
+
+      - name: Create Release
+        run: |
+          gh release create download downloads/* --title "Downloaded File"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
