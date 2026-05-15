@@ -1,10 +1,10 @@
-name: File Downloader
+name: Advanced Downloader
 
 on:
   workflow_dispatch:
     inputs:
-      url:
-        description: "Download link"
+      urls:
+        description: "Download links (separate with space)"
         required: true
 
 jobs:
@@ -14,19 +14,56 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install aria2
-        run: sudo apt install aria2 -y
+      - name: Install tools
+        run: |
+          sudo apt update
+          sudo apt install -y aria2 zip
 
-      - name: Download file
+      - name: Download files
         run: |
           mkdir downloads
           cd downloads
-          aria2c "${{ github.event.inputs.url }}"
+
+          for url in ${{ github.event.inputs.urls }}
+          do
+            echo "Downloading $url"
+
+            aria2c \
+            -x 16 \
+            -s 16 \
+            -k 1M \
+            --continue=true \
+            "$url"
+
+          done
+
+      - name: Split large files
+        run: |
+          cd downloads
+
+          for file in *
+          do
+            size=$(stat -c%s "$file")
+
+            if [ $size -gt 100000000 ]
+            then
+              echo "Splitting $file"
+              split -b 95M "$file" "$file.part."
+              rm "$file"
+            fi
+          done
 
       - name: Create Release
         run: |
-          gh release create download downloads/* --title "Downloaded File"
+          gh release delete download --yes || true
+          git tag -d download || true
+          git push origin :refs/tags/download || true
+
+          gh release create download downloads/* \
+          --title "Downloaded Files" \
+          --notes "Auto download"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
